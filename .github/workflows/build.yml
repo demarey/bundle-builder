@@ -3,7 +3,7 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
+    branches: [ "main", "latest10" ]
   pull_request:
     branches: [ "main" ]
 
@@ -37,13 +37,34 @@ jobs:
       - name: Install GTK4
         run: brew install gtk4 gtksourceview5 libadwaita
 
-      - uses: demarey/pharo-setup-gha@main
-        with:
-          version: 13
+
+      - name: Install Pharo VM Latest 10
+        run: |
+          URL="https://files.pharo.org/vm/pharo-spur64-headless/Darwin-arm64/latest10.zip"
+          mkdir -p pharo-vm
+          echo "Downloading $URL to pharo-vm"
+          curl -L $URL -o pharo-vm.zip
+          unzip -q pharo-vm.zip -d pharo-vm
+          rm -f pharo-vm.zip
+        shell: bash
+
+      - name: Get Pharo 13 image
+        run: |
+          IMAGE_PATH=pharoImage-x86_64.zip
+          URL="https://files.pharo.org/get-files/130/pharoImage-${{ matrix.arch }}.zip"
+          echo "Downloading $URL"
+          curl -L ${URL} -o pharo-image.zip
+          unzip pharo-image.zip -d image
+          rm -f pharo-image.zip
+          find image -name '*.image' -exec mv '{}' ./Pharo.image \;
+          find image -name '*.changes' -exec mv '{}' ./Pharo.changes \;
+          mv image/*.sources .
+          rm -rf image
+        shell: bash
 
       - name: Run Pharo
         run: |
-          $PHARO --headless Pharo.image eval "Metacello new repository: 'gitlocal://./src'; baseline: 'BundleBuilder'; load. (Smalltalk globals at: #MacBundleBuilder) makeGTK4Bundle${{ matrix.arch == 'arm64' && 'ARM' || '' }}"
+          ./pharo-vm/Pharo.app/Contents/MacOS/Pharo --headless Pharo.image eval "Metacello new repository: 'gitlocal://./src'; baseline: 'BundleBuilder'; load. (Smalltalk globals at: #MacBundleBuilder) makeGTK4Bundle${{ matrix.arch == 'arm64' && 'ARM' || '' }}"
           
           ls -R
           cp -R pharo-vm $VM_DIR
